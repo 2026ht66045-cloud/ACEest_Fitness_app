@@ -26,5 +26,10 @@ COPY --chown=appuser:appuser . .
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Ensure pytest is available
+RUN pip install --no-cache-dir pytest
+
+COPY . .
+
 # Run the Tkinter app
 CMD ["python", "Aceestver-1.0.py"]
