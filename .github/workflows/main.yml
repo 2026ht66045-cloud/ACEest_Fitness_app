@@ -53,4 +53,4 @@ jobs:
         run: docker build -t aceest-app:latest .
 
       - name: Run tests inside container
-        run: docker run --rm aceest-app:latest .venv/bin/pytest -m pytest
+        run: xvfb-run -a pytest
