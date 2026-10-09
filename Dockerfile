@@ -24,10 +24,9 @@ COPY --chown=appuser:appuser . .
 
 # Install Python dependencies if needed
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Ensure pytest is available
-RUN pip install --no-cache-dir pytest
+RUN python -m venv .venv && \
+    .venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    .venv/bin/pip install pytest
 
 COPY . .
 
