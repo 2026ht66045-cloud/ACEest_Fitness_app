@@ -23,12 +23,12 @@ pipeline {
             }
         }
 
-        stage('Tesy'){
+        stage('Test'){
             steps{
                 echo 'Running Automated Test'
 
                 sh '''
-                    pytest aceest_app.py
+                    .venv/bin/pytest aceest_app.py
                 '''
             }
         }
