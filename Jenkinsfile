@@ -28,7 +28,7 @@ pipeline {
                 echo 'Running Automated Test'
 
                 sh '''
-                    .venv/bin/pytest aceest_app.py
+                    .venv/bin/pytest -m pytest
                 '''
             }
         }

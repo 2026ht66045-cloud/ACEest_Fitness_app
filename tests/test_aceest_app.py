@@ -5,7 +5,7 @@ import tkinter as tk
 
 # Load the file directly by path to handle both '-' and '.' in the filename
 current_dir = Path(__file__).resolve().parent
-file_path = current_dir / "Aceestver-1.0.py"
+file_path = current_dir / "test_aceest_app.py"
 
 spec = importlib.util.spec_from_file_location("aceest_module", file_path)
 aceest_module = importlib.util.module_from_spec(spec)
