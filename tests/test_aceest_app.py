@@ -7,9 +7,8 @@ from aceest_app import ACEestApp
 
 @pytest.fixture
 def app():
-    """Fixture to create and destroy the Tkinter app safely in headless CI."""
+    """Fixture to create and destroy the Tkinter app safely."""
     root = tk.Tk()
-    root.withdraw()
     app = ACEestApp(root)
     yield app
     root.destroy()
