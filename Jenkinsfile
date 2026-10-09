@@ -18,7 +18,7 @@ pipeline {
 
                 sh '''
                      python3 -m venv .venv
-                     sudo dnf install -y python3-pip
+                     dnf install -y python3-pip
                      .venv/bin/pip install -r requirements.txt
                 '''
             }
