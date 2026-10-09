@@ -28,7 +28,8 @@ pipeline {
                 echo 'Running Automated Test'
 
                 sh '''
-                    .venv/bin/pytest -m pytest
+                    cd $WORKSPACE
+                    .venv/bin/pytest tests/
                 '''
             }
         }

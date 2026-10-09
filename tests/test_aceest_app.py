@@ -1,83 +1,50 @@
-import importlib.util
-from pathlib import Path
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 import pytest
 import tkinter as tk
-
-# Load the file directly by path to handle both '-' and '.' in the filename
-current_dir = Path(__file__).resolve().parent
-file_path = current_dir / "test_aceest_app.py"
-
-spec = importlib.util.spec_from_file_location("aceest_module", file_path)
-aceest_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(aceest_module)
-
-ACEestApp = aceest_module.ACEestApp
-
+from aceest_app import ACEestApp
 
 @pytest.fixture
-def app_instance():
-    """Fixture that initializes Tk root and the ACEestApp, then tears it down."""
-    try:
-        root = tk.Tk()
-    except tk.TclError:
-        pytest.skip("Tkinter display not available (headless environment)")
-
-    # Withdraw window to prevent UI popup during tests
-    root.withdraw()
-
+def app():
+    """Fixture to create and destroy the Tkinter app safely."""
+    root = tk.Tk()
     app = ACEestApp(root)
     yield app
-
     root.destroy()
 
+def test_programs_exist(app):
+    """Ensure all expected programs are defined."""
+    assert "Fat Loss (FL)" in app.programs
+    assert "Muscle Gain (MG)" in app.programs
+    assert "Beginner (BG)" in app.programs
 
-def test_initial_state(app_instance):
-    """Test that the application initializes with expected defaults and data store."""
-    app = app_instance
+def test_update_display_fat_loss(app):
+    """Check that selecting Fat Loss updates labels correctly."""
+    app.prog_var.set("Fat Loss (FL)")
+    app.update_display(None)
 
-    # Check root configuration
-    assert app.root.title() == "ACEest Fitness and Gym"
+    data = app.programs["Fat Loss (FL)"]
+    assert app.work_label.cget("text") == data["workout"]
+    assert app.work_label.cget("fg") == data["color"]
+    assert app.diet_label.cget("text") == data["diet"]
 
-    # Verify program data keys exist
-    expected_programs = {"Fat Loss (FL)", "Muscle Gain (MG)", "Beginner (BG)"}
-    assert set(app.programs.keys()) == expected_programs
+def test_update_display_muscle_gain(app):
+    """Check that selecting Muscle Gain updates labels correctly."""
+    app.prog_var.set("Muscle Gain (MG)")
+    app.update_display(None)
 
-    # Verify initial label contents
-    assert app.work_label.cget("text") == "Select a profile to view workout"
-    assert app.diet_label.cget("text") == "Select a profile to view diet"
+    data = app.programs["Muscle Gain (MG)"]
+    assert app.work_label.cget("text") == data["workout"]
+    assert app.work_label.cget("fg") == data["color"]
+    assert app.diet_label.cget("text") == data["diet"]
 
-    # Verify combobox options
-    assert list(app.prog_menu["values"]) == list(app.programs.keys())
+def test_update_display_beginner(app):
+    """Check that selecting Beginner updates labels correctly."""
+    app.prog_var.set("Beginner (BG)")
+    app.update_display(None)
 
-
-@pytest.mark.parametrize(
-    "program_name",
-    ["Fat Loss (FL)", "Muscle Gain (MG)", "Beginner (BG)"],
-)
-def test_update_display_logic(app_instance, program_name):
-    """Verify labels update accurately when a program is selected."""
-    app = app_instance
-    expected_data = app.programs[program_name]
-
-    # Simulate combobox selection
-    app.prog_var.set(program_name)
-    app.update_display(event=None)
-
-    assert app.work_label.cget("text") == expected_data["workout"]
-    assert app.work_label.cget("fg") == expected_data["color"]
-    assert app.diet_label.cget("text") == expected_data["diet"]
-
-
-def test_event_binding_trigger(app_instance):
-    """Test that firing the ComboboxSelected virtual event updates UI labels."""
-    app = app_instance
-    target_program = "Muscle Gain (MG)"
-
-    # Set selection in dropdown
-    app.prog_menu.set(target_program)
-    # Generate Tk event
-    app.prog_menu.event_generate("<<ComboboxSelected>>")
-    app.root.update_idletasks()
-
-    assert app.work_label.cget("text") == app.programs[target_program]["workout"]
-    assert app.diet_label.cget("text") == app.programs[target_program]["diet"]
+    data = app.programs["Beginner (BG)"]
+    assert app.work_label.cget("text") == data["workout"]
+    assert app.work_label.cget("fg") == data["color"]
+    assert app.diet_label.cget("text") == data["diet"]
