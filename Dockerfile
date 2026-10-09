@@ -22,5 +22,9 @@ WORKDIR /home/appuser/app
 # Copy application code
 COPY --chown=appuser:appuser . .
 
+# Install Python dependencies if needed
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Run the Tkinter app
 CMD ["python", "Aceestver-1.0.py"]
