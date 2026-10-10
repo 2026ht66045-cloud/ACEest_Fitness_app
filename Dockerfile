@@ -1,11 +1,7 @@
 FROM python:3.10-slim
 
-WORKDIR /app
-
-# Install system dependencies including xvfb and xauth
-RUN apt-get update && apt-get install -y \
-    xvfb \
-    xauth \
+# Install Tkinter + xvfb in one step
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-tk \
     tk \
     libx11-6 \
@@ -13,21 +9,27 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libxft2 \
     libxss1 \
+    xvfb \
+    xauth \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user (optional for security)
+# Create non-root user
 RUN useradd -m appuser
 USER appuser
 
-# Copy application code
-COPY --chown=appuser:appuser . .
+# Set working directory
+WORKDIR /home/appuser/app
 
-# Install Python dependencies
-COPY requirements.txt .
+# Copy requirements first (better caching)
+COPY --chown=appuser:appuser requirements.txt .
+
+# Install dependencies in a venv
 RUN python -m venv .venv && \
     .venv/bin/pip install --no-cache-dir -r requirements.txt && \
     .venv/bin/pip install pytest
 
-COPY . .
+# Copy application code
+COPY --chown=appuser:appuser . .
 
+# Default command (for local run)
 CMD ["python", "aceest_app.py"]
