@@ -51,17 +51,19 @@ pipeline {
     }
 
     post {
-        failure {
-            echo "Build or Deployment failed! Rolling back to previous stable version..."
-            script {
-                // Stop the broken container
-                sh 'docker stop aceest-app || true'
-                sh 'docker rm aceest-app || true'
-
-                // Rollback: Spin up the last known 'stable' container
-                sh 'docker run -d --name aceest-app ${IMAGE_NAME}:stable'
+    failure {
+        echo "Build failed! Rolling back to stable image ID: ${STABLE_IMAGE_ID}..."
+        script {
+            try {
+                // Prepend sudo to docker commands
+                sh 'sudo docker stop aceest-app || true'
+                sh 'sudo docker rm aceest-app || true'
+                sh 'sudo docker run -d --name aceest-app ${STABLE_IMAGE_ID}'
+                echo "Rollback complete using image ID ${STABLE_IMAGE_ID}."
+            } catch (Exception err) {
+                echo "Rollback encountered an error: ${err.getMessage()}"
             }
-            echo "Rollback complete. System reverted to 'stable'."
         }
     }
+}
 }
