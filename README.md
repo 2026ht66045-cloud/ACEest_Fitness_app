@@ -1,28 +1,76 @@
-AACEest Fitness & Performance App
+# ACEest Fitness & Performance App
 
-ACEest Fitness & Performance is a desktop application built with Python (tkinter) and SQLite, 
-designed for fitness trainers and administrators to manage client profiles, track weekly progress, log workouts and exercises, generate AI-style training programs, and export professional PDF client reports.
+ACEest Fitness & Performance is a desktop application built with Python, Tkinter, and SQLite for fitness trainers and administrators to manage client profiles, track weekly progress, log workouts and exercises, generate AI-style training plans, and export professional PDF client reports.
 
-To run this application, we need python3 or latest version.
-we need to install some packages to run this app
+## Features
 
-🛠️ Prerequisites & Installation
-Make sure you have Python 3.8+ installed on your system.
+- Client profile management
+- Weekly adherence tracking
+- Workout and exercise logging
+- AI-style training program generation
+- PDF report export
+- Membership status tracking
+- SQLite database storage
 
-Clone the repository:
+## Requirements
 
-Bash
-git clone https://github.com/your-username/aceest-fitness-app.git
-cd aceest-fitness-app
+- Python 3.8+
+- Tkinter (included with most Python installations)
+- SQLite3 (included with Python)
+- pip for installing Python packages
 
-Install required dependencies:
-pip install matplotlib fpdf
-(Note: tkinter and sqlite3 come built-in with standard Python installations.)
+## Installation
 
-Run the application:
-python main.py
+1. Clone the repository:
 
-Default Login Credentials:
-Username: admin
-Password: admin
+   ```bash
+   git clone https://github.com/2026ht66045-cloud/ACEest_Fitness_app.git
+   cd ACEest_Fitness_app
+   ```
 
+2. Create and activate a virtual environment (optional but recommended):
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. Install the required dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   If you are installing manually instead of using the requirements file:
+
+   ```bash
+   pip install matplotlib fpdf
+   ```
+
+   On Linux, you may also need the Tkinter system package:
+
+   ```bash
+   sudo apt-get install python3-tk
+   ```
+
+## Run the Application
+
+```bash
+python3 aceest_app.py
+```
+
+If you are on Windows, you can also run:
+
+```bash
+python aceest_app.py
+```
+
+## Default Login
+
+- Username: `admin`
+- Password: `admin`
+
+## Notes
+
+- The app automatically creates the SQLite database file (`aceest_fitness.db`) when it starts for the first time.
+- The application is designed for local desktop use and is not a web app.
