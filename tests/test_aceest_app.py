@@ -1,168 +1,172 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-import pytest
-import tkinter as tk
-from tkinter import messagebox
+import os
 import sqlite3
-from aceest_app import ACEestApp
+import tkinter as tk
+from tkinter import ttk
+from unittest.mock import patch, MagicMock
+import pytest
+
+from aceest_app import ACEestApp, DB_NAME
+
 
 @pytest.fixture
-def app(monkeypatch):
-    """Fixture to create and destroy the Tkinter app safely in headless CI."""
+def mock_root():
+    """Fixture to provide a hidden root Tk instance for UI testing."""
     root = tk.Tk()
     root.withdraw()
-    app = ACEestApp(root)
-
-    # Mock messagebox functions
-    monkeypatch.setattr(messagebox, "showinfo", lambda *a, **k: None)
-    monkeypatch.setattr(messagebox, "showerror", lambda *a, **k: None)
-    monkeypatch.setattr(messagebox, "showwarning", lambda *a, **k: None)
-
-    # Mock plt.show
-    import matplotlib.pyplot as plt
-    monkeypatch.setattr(plt, "show", lambda *a, **k: None)
-
-    yield app
-    root.update_idletasks()
+    yield root
     root.destroy()
 
 
-def test_programs_exist(app):
-    assert "Fat Loss (FL) – 3 day" in app.programs
-    assert "Muscle Gain (MG) – PPL" in app.programs
+@pytest.fixture
+def test_db():
+    """Fixture to set up a fresh test database and clean up afterwards."""
+    if os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
+    yield DB_NAME
+    if os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
 
-def test_save_client_and_load(app):
-    app.name.set("TestUser")
-    app.age.set(25)
-    app.height.set(175)
-    app.weight.set(70)
-    app.program.set("Fat Loss (FL) – 3 day")
-    app.target_weight.set(65)
-    app.target_adherence.set(80)
-    app.save_client()
 
-    app.load_client()
-    summary_text = app.summary.get("1.0", "end")
-    assert "TestUser" in summary_text
-    assert "Fat Loss (FL)" in summary_text
-    assert "65" in summary_text
+@pytest.fixture
+def app_instance(mock_root, test_db):
+    """Fixture to initialize the app, bypassing login and initializing all required UI elements."""
+    with patch.object(ACEestApp, "show_login_window", lambda self: None):
+        app = ACEestApp(mock_root)
+        app.init_db()
+        app.setup_data()
+        
+        # Initialize UI variables normally created inside setup_ui()
+        app.name = tk.StringVar()
+        app.age = tk.IntVar()
+        app.height = tk.DoubleVar()
+        app.weight = tk.DoubleVar()
+        app.program = tk.StringVar()
+        app.membership_var = tk.StringVar()
+        app.status_var = tk.StringVar(value="Ready")
+        
+        # Mock or initialize the Text summary widget so refresh_summary doesn't crash
+        app.summary = MagicMock()
+        
+        return app
 
-def test_save_client_without_name_or_program(app):
-    app.name.set("")
-    app.program.set("")
-    app.save_client()  # Should trigger error but not crash
 
-def test_save_client_duplicate_replaces(app):
-    app.name.set("DupUser")
-    app.age.set(20)
-    app.weight.set(60)
-    app.program.set("Beginner (BG)")
-    app.save_client()
+# ==========================================
+# 1. Database Initialization Tests
+# ==========================================
+def test_init_db(app_instance):
+    """Test if all required database tables are successfully created."""
+    app_instance.cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table';"
+    )
+    tables = {row[0] for row in app_instance.cur.fetchall()}
+    
+    expected_tables = {"users", "clients", "progress", "workouts", "exercises", "metrics"}
+    assert expected_tables.issubset(tables)
 
-    app.weight.set(65)
-    app.save_client()
 
-    app.cur.execute("SELECT weight FROM clients WHERE name=?", ("DupUser",))
-    row = app.cur.fetchone()
-    assert row[0] == 65
+# ==========================================
+# 2. Authentication / Login Tests
+# ==========================================
+def test_login_success(app_instance, mock_root):
+    """Test successful login with default admin credentials."""
+    app_instance.login_win = MagicMock()
+    app_instance.username_var = tk.StringVar(value="admin")
+    app_instance.password_var = tk.StringVar(value="admin")
+    
+    with patch.object(app_instance, "setup_ui") as mock_setup_ui, \
+         patch.object(mock_root, "deiconify") as mock_deiconify:
+        
+        app_instance.login_user()
+        
+        assert app_instance.user_role == "Admin"
+        assert app_instance.current_user == "admin"
+        mock_setup_ui.assert_called_once()
+        mock_deiconify.assert_called_once()
 
-def test_load_client_not_found(app):
-    app.name.set("NonExistent")
-    app.load_client()
-    assert app.summary.get("1.0", "end").strip() == ""
 
-def test_save_progress(app):
-    app.name.set("ProgressUser")
-    app.age.set(30)
-    app.weight.set(80)
-    app.program.set("Muscle Gain (MG) – PPL")
-    app.save_client()
+def test_login_failure(app_instance):
+    """Test login failure with invalid credentials."""
+    app_instance.username_var = tk.StringVar(value="wrong_user")
+    app_instance.password_var = tk.StringVar(value="wrong_pass")
+    
+    with patch("tkinter.messagebox.showerror") as mock_showerror:
+        app_instance.login_user()
+        assert app_instance.user_role is None
+        mock_showerror.assert_called_once()
 
-    app.adherence.set(85)
-    app.save_progress()
 
-    app.cur.execute("SELECT * FROM progress WHERE client_name=?", ("ProgressUser",))
-    row = app.cur.fetchone()
-    assert row is not None
-    assert row[1] == "ProgressUser"
-    assert row[3] == 85
+def test_save_client_empty_name(app_instance):
+    """Test validation error when saving a client with an empty name."""
+    app_instance.name.set("")
+    with patch("tkinter.messagebox.showerror") as mock_showerror:
+        app_instance.save_client()
+        mock_showerror.assert_called_once()
 
-def test_save_progress_without_client(app):
-    app.name.set("")
-    app.adherence.set(50)
-    app.save_progress()
-    app.cur.execute("SELECT * FROM progress WHERE client_name=?", ("",))
-    row = app.cur.fetchone()
-    assert row is not None
-    assert row[3] == 50
 
-def test_show_progress_chart_no_data(app):
-    app.name.set("ChartUser")
-    app.save_client()
-    app.show_progress_chart()  # Should not crash
+def test_generate_ai_program(app_instance):
+    """Test AI program generation for a valid client and experience level."""
+    app_instance.current_client = "John Doe"
+    
+    app_instance.cur.execute(
+        "INSERT INTO clients (name, program) VALUES (?, ?)",
+        ("John Doe", "Muscle Gain (MG) – PPL")
+    )
+    app_instance.conn.commit()
 
-def test_show_weight_chart_no_data(app):
-    app.name.set("WeightUser")
-    app.save_client()
-    app.show_weight_chart()  # Should not crash
+    with patch("tkinter.simpledialog.askstring", return_value="intermediate"), \
+         patch("tkinter.messagebox.showinfo") as mock_showinfo:
+        
+        app_instance.program_tree = ttk.Treeview(
+            app_instance.root, columns=("day", "exercise", "sets", "reps")
+        )
+        
+        app_instance.generate_ai_program()
+        
+        children = app_instance.program_tree.get_children()
+        assert len(children) > 0
+        mock_showinfo.assert_called_once()
 
-def test_show_bmi_info_underweight(monkeypatch, app):
-    called = {}
-    def fake_info(title, message):
-        called["info"] = message
-    monkeypatch.setattr(messagebox, "showinfo", fake_info)
 
-    app.name.set("BMIUser")
-    app.height.set(180)
-    app.weight.set(50)
-    app.program.set("Beginner (BG)")
-    app.save_client()
-    app.show_bmi_info()
+def test_generate_ai_program_invalid_experience(app_instance):
+    """Test AI program generation failure on invalid experience level input."""
+    app_instance.current_client = "John Doe"
+    
+    with patch("tkinter.simpledialog.askstring", return_value="expert"), \
+         patch("tkinter.messagebox.showerror") as mock_showerror:
+        
+        app_instance.program_tree = ttk.Treeview(
+            app_instance.root, columns=("day", "exercise", "sets", "reps")
+        )
+        app_instance.generate_ai_program()
+        mock_showerror.assert_called_once()
 
-    assert "Underweight" in called["info"]
 
-def test_show_bmi_info_normal(monkeypatch, app):
-    called = {}
-    def fake_info(title, message):
-        called["info"] = message
-    monkeypatch.setattr(messagebox, "showinfo", fake_info)
+def test_export_pdf_report(app_instance):
+    """Test PDF generation execution for a selected client."""
+    app_instance.current_client = "John Doe"
+    
+    app_instance.cur.execute(
+        """
+        INSERT INTO clients (name, age, height, weight, program, membership_expiry)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        ("John Doe", 25, 180.0, 80.0, "Beginner (BG)", "2027-12-31")
+    )
+    app_instance.conn.commit()
 
-    app.name.set("BMIUser2")
-    app.height.set(170)
-    app.weight.set(65)
-    app.program.set("Beginner (BG)")
-    app.save_client()
-    app.show_bmi_info()
+    pdf_filename = "John Doe_report.pdf"
+    if os.path.exists(pdf_filename):
+        os.remove(pdf_filename)
 
-    assert "Normal" in called["info"]
+    with patch("tkinter.messagebox.showinfo") as mock_showinfo:
+        app_instance.export_pdf_report()
+        
+        assert os.path.exists(pdf_filename)
+        mock_showinfo.assert_called_once()
 
-def test_show_bmi_info_overweight(monkeypatch, app):
-    called = {}
-    def fake_info(title, message):
-        called["info"] = message
-    monkeypatch.setattr(messagebox, "showinfo", fake_info)
+    if os.path.exists(pdf_filename):
+        os.remove(pdf_filename)
 
-    app.name.set("BMIUser3")
-    app.height.set(165)
-    app.weight.set(75)
-    app.program.set("Beginner (BG)")
-    app.save_client()
-    app.show_bmi_info()
-
-    assert "Overweight" in called["info"]
-
-def test_show_bmi_info_obese(monkeypatch, app):
-    called = {}
-    def fake_info(title, message):
-        called["info"] = message
-    monkeypatch.setattr(messagebox, "showinfo", fake_info)
-
-    app.name.set("BMIUser4")
-    app.height.set(160)
-    app.weight.set(95)
-    app.program.set("Beginner (BG)")
-    app.save_client()
-    app.show_bmi_info()
-
-    assert "Obese" in called["info"]
