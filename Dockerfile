@@ -23,8 +23,6 @@ WORKDIR /home/appuser/app
 # Copy requirements first (better caching)
 COPY --chown=appuser:appuser requirements.txt .
 
-RUN sudo dnf install -y xorg-x11-server-Xvfb xauth
-
 # Install dependencies in a venv
 RUN python -m venv .venv && \
     .venv/bin/pip install --no-cache-dir -r requirements.txt && \
