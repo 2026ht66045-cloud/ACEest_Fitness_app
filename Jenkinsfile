@@ -55,9 +55,10 @@ pipeline {
         echo "Build failed! Rolling back to stable image ID: ${STABLE_IMAGE_ID}..."
         script {
             try {
-                sh 'docker stop aceest-app || true'
-                sh 'docker rm aceest-app || true'
-                sh 'docker run -d --name aceest-app ${STABLE_IMAGE_ID}'
+                // Prepend sudo to docker commands
+                sh 'sudo docker stop aceest-app || true'
+                sh 'sudo docker rm aceest-app || true'
+                sh 'sudo docker run -d --name aceest-app ${STABLE_IMAGE_ID}'
                 echo "Rollback complete using image ID ${STABLE_IMAGE_ID}."
             } catch (Exception err) {
                 echo "Rollback encountered an error: ${err.getMessage()}"
