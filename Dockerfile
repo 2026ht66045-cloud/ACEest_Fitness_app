@@ -23,13 +23,15 @@ WORKDIR /home/appuser/app
 # Copy requirements first (better caching)
 COPY --chown=appuser:appuser requirements.txt .
 
-# Install dependencies in a venv
-RUN python -m venv .venv && \
-    .venv/bin/pip install --no-cache-dir -r requirements.txt && \
-    .venv/bin/pip install pytest
+# Install dependencies globally (no venv needed in Docker)
+RUN pip install --no-cache-dir --user -r requirements.txt && \
+    pip install --no-cache-dir --user pytest matplotlib
+
+# Add local user bin to PATH so python/pytest can be found directly
+ENV PATH="/home/appuser/.local/bin:$PATH"
 
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Default command (for local run)
+# Default command (uses system/user Python directly)
 CMD ["python", "aceest_app.py"]
