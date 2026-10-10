@@ -25,7 +25,7 @@ COPY --chown=appuser:appuser requirements.txt .
 
 # Install dependencies globally (no venv needed in Docker)
 RUN pip install --no-cache-dir --user -r requirements.txt && \
-    pip install --no-cache-dir --user pytest matplotlib
+    pip install --no-cache-dir --user pytest matplotlib fpdf
 
 # Add local user bin to PATH so python/pytest can be found directly
 ENV PATH="/home/appuser/.local/bin:$PATH"
