@@ -28,8 +28,10 @@ pipeline {
                 echo 'Running Automated Test'
 
                 sh '''
-                      .venv/bin/pip install pytest pytest-xvfb
-                      xvfb-run -a .venv/bin/pytest tests/
+                      python3 -m venv .venv
+                      .venv/bin/pip install --no-cache-dir -r requirements.txt
+                      .venv/bin/pip install pytest pytest-xvfb matplotlib
+                      .venv/bin/pytest tests/
                 '''
             }
         }
