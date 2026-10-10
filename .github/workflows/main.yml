@@ -35,19 +35,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install xvfb on runner
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Build Docker image
         run: docker build -t aceest-app:latest .
 
   test:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  runs-on: ubuntu-latest
+  needs: docker-build
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t aceest-app:latest .
+    - name: Build Docker image
+      run: docker build -t aceest-app:latest .
 
-      - name: Run tests inside container with xvfb
-        run: |
-          docker run --rm aceest-app:latest bash -c "apt-get update && apt-get install -y xvfb && xvfb-run -a .venv/bin/pytest tests/"
+    - name: Install xvfb on runner
+      run: sudo apt-get update && sudo apt-get install -y xvfb
+
+    - name: Run tests inside container with xvfb
+      run: docker run --rm aceest-app:latest xvfb-run -a .venv/bin/pytest tests/

@@ -1,7 +1,6 @@
-
 FROM python:3.10-slim
 
-# Install only essential dependencies for Tkinter GUI
+# Install Tkinter + xvfb in one step
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-tk \
     tk \
@@ -10,25 +9,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libxft2 \
     libxss1 \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
+# Create non-root user
 RUN useradd -m appuser
 USER appuser
 
 # Set working directory
 WORKDIR /home/appuser/app
 
-# Copy application code
-COPY --chown=appuser:appuser . .
+# Copy requirements first (better caching)
+COPY --chown=appuser:appuser requirements.txt .
 
-# Install Python dependencies if needed
-COPY requirements.txt .
+# Install dependencies in a venv
 RUN python -m venv .venv && \
     .venv/bin/pip install --no-cache-dir -r requirements.txt && \
     .venv/bin/pip install pytest
 
-COPY . .
+# Copy application code
+COPY --chown=appuser:appuser . .
 
-# Run the Tkinter app
-CMD ["python", "Aceestver-1.0.py"]
+# Default command (for local run)
+CMD ["python", "aceest_app.py"]
