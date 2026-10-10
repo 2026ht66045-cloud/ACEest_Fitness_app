@@ -28,8 +28,8 @@ pipeline {
                 echo 'Running Automated Test'
 
                 sh '''
-                    cd $WORKSPACE
-                    .venv/bin/pytest tests/
+                      .venv/bin/pip install pytest pytest-xvfb
+                      xvfb-run -a .venv/bin/pytest tests/
                 '''
             }
         }
