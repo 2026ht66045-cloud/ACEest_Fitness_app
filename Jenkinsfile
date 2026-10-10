@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "aceest-fitness"
-        REGISTRY = "your-docker-registry" // Optional: leave blank for local docker
+        STABLE_IMAGE_ID = "164438f9ae21"
     }
 
     stages {
