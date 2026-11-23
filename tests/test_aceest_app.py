@@ -1,33 +1,79 @@
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(_file_)))
 
-import os
 import sqlite3
 import pytest
 import tkinter as tk
+from tkinter import ttk
 from unittest.mock import patch, MagicMock
 
-import aceest_app
+import aceestver_gymapp
 
 @pytest.fixture
 def test_db(tmp_path):
-    """Fixture to set up a temporary SQLite database for testing."""
+    """Fixture to set up an isolated temporary SQLite database for testing."""
     db_file = tmp_path / "test_fitness.db"
-    original_db = aceest_app.DB_NAME
-    aceest_app.DB_NAME = str(db_file)
+    original_db = aceestver_gymapp.DB_NAME
+    aceestver_gymapp.DB_NAME = str(db_file)
     
-    aceest_app.init_db()
+    aceestver_gymapp.init_db()
     yield str(db_file)
-    aceest_app.DB_NAME = original_db
+    aceestver_gymapp.DB_NAME = original_db
+
+class DummyVar:
+    """Headless stand-in for Tkinter StringVar/IntVar."""
+    def _init_(self, value=""):
+        self._val = value
+    def get(self):
+        return self._val
+    def set(self, val):
+        self._val = val
 
 @pytest.fixture
 def app_instance(test_db):
-    """Fixture to initialize the Tkinter root and application instance safely."""
-    root = tk.Tk()
-    root.withdraw()
-    app = aceest_app.ACEestApp(root)
-    yield app
-    root.destroy()
+    """Fixture to safely instantiate ACEestApp in completely headless environments without X11."""
+    # Check if a physical/virtual X-server is active
+    has_display = False
+    try:
+        test_root = tk.Tk()
+        test_root.withdraw()
+        test_root.destroy()
+        has_display = True
+    except (tk.TclError, Exception):
+        has_display = False
+
+    if has_display:
+        root = tk.Tk()
+        root.withdraw()
+        app = aceestver_gymapp.ACEestApp(root)
+        yield app
+        try:
+            root.destroy()
+        except Exception:
+            pass
+    else:
+        # Intercept Tkinter widget initializations to bypass Tcl interpreter calls
+        with patch("tkinter.Tk") as mock_tk_cls, \
+             patch("tkinter.Frame") as mock_frame, \
+             patch("tkinter.Label") as mock_label, \
+             patch("tkinter.Entry") as mock_entry, \
+             patch("tkinter.ttk.Button") as mock_btn, \
+             patch("tkinter.ttk.Combobox") as mock_combo, \
+             patch("tkinter.ttk.Notebook") as mock_notebook, \
+             patch("tkinter.Text") as mock_text:
+
+            mock_root = mock_tk_cls.return_value
+            mock_root.winfo_children.return_value = []
+
+            # Prevent Tkinter StringVar/IntVar initialization crashes
+            with patch("tkinter.StringVar", side_effect=lambda value="": DummyVar(value)), \
+                 patch("tkinter.IntVar", side_effect=lambda value=0: DummyVar(value)):
+
+                app = aceestver_gymapp.ACEestApp(mock_root)
+                yield app
+
+                if hasattr(app, "conn") and app.conn:
+                    app.conn.close()
 
 def test_init_db(test_db):
     """Test database initialization and default admin creation."""
