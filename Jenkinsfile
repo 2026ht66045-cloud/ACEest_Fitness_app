@@ -1,57 +1,53 @@
 pipeline {
     agent any
-    triggers {
-        githubPush()
-    }
 
     environment {
-        // Replace with your Docker Hub username and repository name
-        DOCKER_IMAGE = "2026ht66045/aceest_app"
-        // Uses Jenkins build number as the image tag
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        PYTHONUNBUFFERED = '1'
+        MPLBACKEND = 'Agg'
+        DOCKER_IMAGE = '2026ht66045/aceest_app'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Set Up Virtualenv & Dependencies') {
             steps {
-                echo 'Checking out main branch'
-                checkout scm
-            }
-        }
-
-       stage('Build') {
-            steps {
-                echo 'Installing python dependencies'
                 sh '''
+                    rm -rf .venv
                     python3 -m venv .venv
-                    .venv/bin/pip install --no-cache-dir -r requirements.txt
+                    . .venv/bin/activate
+                    pip install --upgrade pip
+
+                    # Install required Python dependencies
+                    pip install matplotlib fpdf2 pytest pytest-cov
+
+                    if [ -f requirements.txt ]; then
+                        pip install -r requirements.txt
+                    fi
                 '''
             }
         }
 
-        stage('Test') {
-             steps {
-              echo 'Running Automated Tests'
-              sh '''
-                 .venv/bin/pip install pytest pytest-xvfb matplotlib
-                 .venv/bin/pytest tests/
-              '''
+        stage('Execute Pytest') {
+            steps {
+                sh '''
+                    . .venv/bin/activate
+                    xvfb-run -a pytest aceestver_test_1.py --junitxml=test-results.xml -v
+                '''
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Build & Push Docker Image') {
             steps {
-                echo 'Building and pushing Docker image to Docker Hub'
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
+                    credentialsId: env.DOCKER_CREDENTIALS_ID,
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
+                        docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest .
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker build -t $DOCKER_IMAGE:$IMAGE_TAG -t $DOCKER_IMAGE:latest .
-                        docker push $DOCKER_IMAGE:$IMAGE_TAG
-                        docker push $DOCKER_IMAGE:latest
+                        docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                        docker push ${DOCKER_IMAGE}:latest
                         docker logout
                     '''
                 }
@@ -61,8 +57,13 @@ pipeline {
 
     post {
         always {
-            // Clean up local images to save disk space on the Jenkins agent
-            sh "docker rmi $DOCKER_IMAGE:$IMAGE_TAG $DOCKER_IMAGE:latest || true"
+            junit allowEmptyResults: true, testResults: 'test-results.xml'
+        }
+        cleanup {
+            sh 'rm -rf .venv test_fitness.db aceest_fitness.db'
+        }
+        failure {
+            echo 'Build failed. Check test-results.xml and Jenkins console log.'
         }
     }
 }
