@@ -1,5 +1,6 @@
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(_file_)))
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import sqlite3
 import pytest
@@ -7,32 +8,36 @@ import tkinter as tk
 from tkinter import ttk
 from unittest.mock import patch, MagicMock
 
-import aceestver_gymapp
+import aceest_app
+
 
 @pytest.fixture
 def test_db(tmp_path):
     """Fixture to set up an isolated temporary SQLite database for testing."""
     db_file = tmp_path / "test_fitness.db"
-    original_db = aceestver_gymapp.DB_NAME
-    aceestver_gymapp.DB_NAME = str(db_file)
+    original_db = aceest_app.DB_NAME
+    aceest_app.DB_NAME = str(db_file)
     
-    aceestver_gymapp.init_db()
+    aceest_app.init_db()
     yield str(db_file)
-    aceestver_gymapp.DB_NAME = original_db
+    aceest_app.DB_NAME = original_db
+
 
 class DummyVar:
     """Headless stand-in for Tkinter StringVar/IntVar."""
-    def _init_(self, value=""):
+    def __init__(self, value=""):
         self._val = value
+
     def get(self):
         return self._val
+
     def set(self, val):
         self._val = val
+
 
 @pytest.fixture
 def app_instance(test_db):
     """Fixture to safely instantiate ACEestApp in completely headless environments without X11."""
-    # Check if a physical/virtual X-server is active
     has_display = False
     try:
         test_root = tk.Tk()
@@ -45,35 +50,34 @@ def app_instance(test_db):
     if has_display:
         root = tk.Tk()
         root.withdraw()
-        app = aceestver_gymapp.ACEestApp(root)
+        app = aceest_app.ACEestApp(root)
         yield app
         try:
             root.destroy()
         except Exception:
             pass
     else:
-        # Intercept Tkinter widget initializations to bypass Tcl interpreter calls
         with patch("tkinter.Tk") as mock_tk_cls, \
-             patch("tkinter.Frame") as mock_frame, \
-             patch("tkinter.Label") as mock_label, \
-             patch("tkinter.Entry") as mock_entry, \
-             patch("tkinter.ttk.Button") as mock_btn, \
-             patch("tkinter.ttk.Combobox") as mock_combo, \
-             patch("tkinter.ttk.Notebook") as mock_notebook, \
-             patch("tkinter.Text") as mock_text:
+             patch("tkinter.Frame"), \
+             patch("tkinter.Label"), \
+             patch("tkinter.Entry"), \
+             patch("tkinter.ttk.Button"), \
+             patch("tkinter.ttk.Combobox"), \
+             patch("tkinter.ttk.Notebook"), \
+             patch("tkinter.Text"):
 
             mock_root = mock_tk_cls.return_value
             mock_root.winfo_children.return_value = []
 
-            # Prevent Tkinter StringVar/IntVar initialization crashes
             with patch("tkinter.StringVar", side_effect=lambda value="": DummyVar(value)), \
                  patch("tkinter.IntVar", side_effect=lambda value=0: DummyVar(value)):
 
-                app = aceestver_gymapp.ACEestApp(mock_root)
+                app = aceest_app.ACEestApp(mock_root)
                 yield app
 
                 if hasattr(app, "conn") and app.conn:
                     app.conn.close()
+
 
 def test_init_db(test_db):
     """Test database initialization and default admin creation."""
@@ -91,6 +95,7 @@ def test_init_db(test_db):
     assert row[0] == "Admin"
     conn.close()
 
+
 def test_login_success(app_instance):
     """Test successful user login with valid admin credentials."""
     app_instance.username_var.set("admin")
@@ -102,6 +107,7 @@ def test_login_success(app_instance):
         assert app_instance.current_role == "Admin"
         mock_dash.assert_called_once()
 
+
 def test_login_failure(app_instance):
     """Test login failure with invalid credentials."""
     app_instance.username_var.set("admin")
@@ -112,6 +118,7 @@ def test_login_failure(app_instance):
         assert app_instance.current_user is None
         mock_error.assert_called_once()
 
+
 def test_add_save_client(app_instance):
     """Test adding a client via simpledialog input mock, avoiding UI refresh errors."""
     with patch("tkinter.simpledialog.askstring", return_value="John Doe"), \
@@ -120,7 +127,6 @@ def test_add_save_client(app_instance):
         
         app_instance.add_save_client()
         
-        # Verify client is stored in DB
         app_instance.cur.execute("SELECT name, membership_status FROM clients WHERE name=?", ("John Doe",))
         row = app_instance.cur.fetchone()
         assert row is not None
@@ -128,6 +134,7 @@ def test_add_save_client(app_instance):
         assert row[1] == "Active"
         mock_refresh.assert_called_once()
         mock_info.assert_called_once()
+
 
 def test_generate_program(app_instance):
     """Test AI program generator assigns a workout program, bypassing UI summary updates."""
@@ -147,6 +154,7 @@ def test_generate_program(app_instance):
         mock_refresh.assert_called_once()
         mock_info.assert_called_once()
 
+
 def test_add_workout(app_instance):
     """Test adding workout entries for a client."""
     app_instance.current_client = "Mike Smith"
@@ -162,6 +170,7 @@ def test_add_workout(app_instance):
     app_instance.cur.execute("SELECT workout_type, duration_min, notes FROM workouts WHERE client_name=?", ("Mike Smith",))
     row = app_instance.cur.fetchone()
     assert row == ("Strength", 45, "Great session")
+
 
 def test_check_membership(app_instance):
     """Test viewing membership status popup info."""
