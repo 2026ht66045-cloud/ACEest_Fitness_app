@@ -19,24 +19,22 @@ pipeline {
             }
         }
 
-        stage('Build') {
+       stage('Build') {
             steps {
                 echo 'Installing python dependencies'
                 sh '''
                     python3 -m venv .venv
-                    .venv/bin/pip install -r requirements.txt
+                    .venv/bin/pip install --no-cache-dir -r requirements.txt
                 '''
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running Automated Test'
+                echo 'Running Automated Tests'
                 sh '''
-                    python3 -m venv .venv
-                    .venv/bin/pip install --no-cache-dir -r requirements.txt
                     .venv/bin/pip install pytest pytest-xvfb matplotlib
-                    .venv/bin/pytest tests/
+                    xvfb-run -a .venv/bin/pytest tests/
                 '''
             }
         }
