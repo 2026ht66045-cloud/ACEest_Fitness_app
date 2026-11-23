@@ -30,12 +30,12 @@ pipeline {
         }
 
         stage('Test') {
-            steps {
-                echo 'Running Automated Tests'
-                sh '''
-                    .venv/bin/pip install pytest pytest-xvfb matplotlib
-                    xvfb-run -a .venv/bin/pytest tests/
-                '''
+             steps {
+              echo 'Running Automated Tests'
+              sh '''
+                 .venv/bin/pip install pytest pytest-xvfb matplotlib
+                 .venv/bin/pytest tests/
+              '''
             }
         }
 
