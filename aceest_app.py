@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import sqlite3
 from datetime import datetime, date
 import matplotlib.pyplot as plt
@@ -138,7 +138,7 @@ class ACEestApp:
     def login(self):
         username = self.username_var.get().strip()
         password = self.password_var.get().strip()
-        self.cur.execute("SELECT role FROM users WHERE username=? AND password=?", (username,password))
+        self.cur.execute("SELECT role FROM users WHERE username=? AND password=?", (username, password))
         row = self.cur.fetchone()
         if row:
             self.current_user = username
@@ -160,7 +160,7 @@ class ACEestApp:
         left.pack(side="left", fill="y", padx=10, pady=10)
         
         # Client selection
-        tk.Label(left, text="Select Client", bg="#1a1a1a", fg="white").pack(pady=(5,0))
+        tk.Label(left, text="Select Client", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
         self.client_list = ttk.Combobox(left, state="readonly")
         self.client_list.pack()
         self.client_list.bind("<<ComboboxSelected>>", self.load_client)
@@ -206,7 +206,7 @@ class ACEestApp:
         name = tk.simpledialog.askstring("Client Name", "Enter client name:")
         if not name:
             return
-        self.cur.execute("INSERT OR IGNORE INTO clients (name,membership_status) VALUES (?,?)",(name,"Active"))
+        self.cur.execute("INSERT OR IGNORE INTO clients (name,membership_status) VALUES (?,?)", (name, "Active"))
         self.conn.commit()
         self.refresh_client_list()
         messagebox.showinfo("Saved", f"Client {name} saved")
@@ -227,7 +227,7 @@ class ACEestApp:
             return
         program_type = random.choice(list(self.program_templates.keys()))
         program_detail = random.choice(self.program_templates[program_type])
-        self.cur.execute("UPDATE clients SET program=? WHERE name=?",(program_detail,self.current_client))
+        self.cur.execute("UPDATE clients SET program=? WHERE name=?", (program_detail, self.current_client))
         self.conn.commit()
         messagebox.showinfo("Program Generated", f"Program for {self.current_client}: {program_detail}")
         self.refresh_summary()
@@ -239,13 +239,13 @@ class ACEestApp:
             return
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial","B",16)
-        pdf.cell(0,10,f"ACEest Client Report - {self.current_client}",ln=True)
-        self.cur.execute("SELECT * FROM clients WHERE name=?",(self.current_client,))
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, f"ACEest Client Report - {self.current_client}", ln=True)
+        self.cur.execute("SELECT * FROM clients WHERE name=?", (self.current_client,))
         client = self.cur.fetchone()
-        pdf.set_font("Arial","",12)
-        for i,col in enumerate(["ID","Name","Age","Height","Weight","Program","Calories","Target Weight","Target Adherence","Membership","End"]):
-            pdf.cell(0,10,f"{col}: {client[i]}",ln=True)
+        pdf.set_font("Arial", "", 12)
+        for i, col in enumerate(["ID", "Name", "Age", "Height", "Weight", "Program", "Calories", "Target Weight", "Target Adherence", "Membership", "End"]):
+            pdf.cell(0, 10, f"{col}: {client[i]}", ln=True)
         pdf.output(f"{self.current_client}_report.pdf")
         messagebox.showinfo("PDF Generated", f"{self.current_client}_report.pdf created")
     
@@ -253,8 +253,8 @@ class ACEestApp:
     def check_membership(self):
         if not self.current_client:
             return
-        self.cur.execute("SELECT membership_status,membership_end FROM clients WHERE name=?",(self.current_client,))
-        status,end = self.cur.fetchone()
+        self.cur.execute("SELECT membership_status,membership_end FROM clients WHERE name=?", (self.current_client,))
+        status, end = self.cur.fetchone()
         msg = f"Membership: {status}\nRenewal Date: {end if end else 'N/A'}"
         messagebox.showinfo("Membership", msg)
     
@@ -262,12 +262,12 @@ class ACEestApp:
     def refresh_summary(self):
         if not self.current_client:
             return
-        self.cur.execute("SELECT * FROM clients WHERE name=?",(self.current_client,))
+        self.cur.execute("SELECT * FROM clients WHERE name=?", (self.current_client,))
         client = self.cur.fetchone()
         text = f"Name: {client[1]}\nProgram: {client[5]}\nCalories: {client[6]}\nMembership: {client[9]}"
         self.summary_text.configure(state="normal")
-        self.summary_text.delete("1.0","end")
-        self.summary_text.insert("end",text)
+        self.summary_text.delete("1.0", "end")
+        self.summary_text.insert("end", text)
         self.summary_text.configure(state="disabled")
     
     def plot_charts(self):
@@ -275,39 +275,39 @@ class ACEestApp:
             widget.destroy()
         if not self.current_client:
             return
-        self.cur.execute("SELECT week, adherence FROM progress WHERE client_name=? ORDER BY id",(self.current_client,))
+        self.cur.execute("SELECT week, adherence FROM progress WHERE client_name=? ORDER BY id", (self.current_client,))
         data = self.cur.fetchall()
         if not data:
             return
         weeks = [d[0] for d in data]
         adherence = [d[1] for d in data]
-        fig, ax = plt.subplots(figsize=(6,3))
-        ax.plot(weeks,adherence,marker="o")
+        fig, ax = plt.subplots(figsize=(6, 3))
+        ax.plot(weeks, adherence, marker="o")
         ax.set_title("Weekly Adherence")
         ax.set_ylabel("%")
-        ax.set_ylim(0,100)
+        ax.set_ylim(0, 100)
         ax.grid(True)
-        canvas = FigureCanvasTkAgg(fig,self.chart_frame)
+        canvas = FigureCanvasTkAgg(fig, self.chart_frame)
         canvas.draw()
-        canvas.get_tk_widget().pack(fill="both",expand=True)
+        canvas.get_tk_widget().pack(fill="both", expand=True)
     
     # ---------- WORKOUT + EXERCISE TAB ----------
     def setup_workout_tab(self):
         # Treeview
-        columns = ("date","type","duration","notes")
+        columns = ("date", "type", "duration", "notes")
         self.tree_workouts = ttk.Treeview(self.tab_workouts, columns=columns, show="headings")
         for c in columns:
-            self.tree_workouts.heading(c,c.title())
-            self.tree_workouts.column(c,width=150)
-        self.tree_workouts.pack(fill="both",expand=True)
-        ttk.Button(self.tab_workouts,text="Add Workout",command=self.add_workout).pack(pady=5)
+            self.tree_workouts.heading(c, text=c.title())
+            self.tree_workouts.column(c, width=150)
+        self.tree_workouts.pack(fill="both", expand=True)
+        ttk.Button(self.tab_workouts, text="Add Workout", command=self.add_workout).pack(pady=5)
     
     def refresh_workouts(self):
         for row in self.tree_workouts.get_children():
             self.tree_workouts.delete(row)
         if not self.current_client:
             return
-        self.cur.execute("SELECT date,workout_type,duration_min,notes FROM workouts WHERE client_name=? ORDER BY date DESC",(self.current_client,))
+        self.cur.execute("SELECT date,workout_type,duration_min,notes FROM workouts WHERE client_name=? ORDER BY date DESC", (self.current_client,))
         rows = self.cur.fetchall()
         for r in rows:
             self.tree_workouts.insert("", "end", values=r)
@@ -318,25 +318,25 @@ class ACEestApp:
         win = tk.Toplevel(self.root)
         win.title(f"Add Workout - {self.current_client}")
         win.geometry("400x400")
-        tk.Label(win,text="Date (YYYY-MM-DD)").pack()
+        tk.Label(win, text="Date (YYYY-MM-DD)").pack()
         date_var = tk.StringVar(value=date.today().isoformat())
-        tk.Entry(win,textvariable=date_var).pack()
-        tk.Label(win,text="Type").pack()
+        tk.Entry(win, textvariable=date_var).pack()
+        tk.Label(win, text="Type").pack()
         type_var = tk.StringVar()
-        ttk.Combobox(win,textvariable=type_var,values=["Strength","Hypertrophy","Cardio","Mobility"],state="readonly").pack()
-        tk.Label(win,text="Duration (min)").pack()
+        ttk.Combobox(win, textvariable=type_var, values=["Strength", "Hypertrophy", "Cardio", "Mobility"], state="readonly").pack()
+        tk.Label(win, text="Duration (min)").pack()
         dur_var = tk.IntVar(value=60)
-        tk.Entry(win,textvariable=dur_var).pack()
-        tk.Label(win,text="Notes").pack()
+        tk.Entry(win, textvariable=dur_var).pack()
+        tk.Label(win, text="Notes").pack()
         notes_var = tk.StringVar()
-        tk.Entry(win,textvariable=notes_var).pack()
+        tk.Entry(win, textvariable=notes_var).pack()
         def save():
             self.cur.execute("INSERT INTO workouts (client_name,date,workout_type,duration_min,notes) VALUES (?,?,?,?,?)",
-                             (self.current_client,date_var.get(),type_var.get(),dur_var.get(),notes_var.get()))
+                             (self.current_client, date_var.get(), type_var.get(), dur_var.get(), notes_var.get()))
             self.conn.commit()
             self.refresh_workouts()
             win.destroy()
-        ttk.Button(win,text="Save",command=save).pack(pady=10)
+        ttk.Button(win, text="Save", command=save).pack(pady=10)
     
     # ---------- UTILITY ----------
     def clear_root(self):
