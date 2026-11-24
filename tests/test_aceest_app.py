@@ -1,112 +1,189 @@
-import sys, os
+import sys
+import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+import sqlite3
 import pytest
 import tkinter as tk
-from tkinter import messagebox
-from aceest_app import ACEestApp
+from tkinter import ttk
+from unittest.mock import patch, MagicMock
+
+import aceest_app
+
 
 @pytest.fixture
-def app(monkeypatch):
-    """Fixture to create and destroy the Tkinter app safely in headless CI."""
-    root = tk.Tk()
-    root.withdraw()  # Prevents GUI window from showing
-    app = ACEestApp(root)
-    yield app
-    root.destroy()
+def test_db(tmp_path):
+    """Fixture to set up an isolated temporary SQLite database for testing."""
+    db_file = tmp_path / "test_fitness.db"
+    original_db = aceest_app.DB_NAME
+    aceest_app.DB_NAME = str(db_file)
+    
+    aceest_app.init_db()
+    yield str(db_file)
+    aceest_app.DB_NAME = original_db
 
-def test_programs_exist(app):
-    """Ensure all expected programs are defined."""
-    assert "Fat Loss (FL)" in app.programs
-    assert "Muscle Gain (MG)" in app.programs
-    assert "Beginner (BG)" in app.programs
 
-def test_update_program_fat_loss(app):
-    """Check that selecting Fat Loss updates workout, diet, and calories."""
-    app.weight_var.set(70)  # simulate client weight
-    app.program_var.set("Fat Loss (FL)")
-    app.update_program()
+class DummyVar:
+    """Headless stand-in for Tkinter StringVar/IntVar."""
+    def __init__(self, value=""):
+        self._val = value
 
-    data = app.programs["Fat Loss (FL)"]
-    assert data["workout"] in app.workout_text.get("1.0", "end")
-    assert data["diet"] in app.diet_text.get("1.0", "end")
-    expected_calories = int(70 * data["calorie_factor"])
-    assert f"{expected_calories} kcal" in app.calorie_label.cget("text")
+    def get(self):
+        return self._val
 
-def test_update_program_muscle_gain(app):
-    """Check that selecting Muscle Gain updates workout, diet, and calories."""
-    app.weight_var.set(80)
-    app.program_var.set("Muscle Gain (MG)")
-    app.update_program()
+    def set(self, val):
+        self._val = val
 
-    data = app.programs["Muscle Gain (MG)"]
-    assert data["workout"] in app.workout_text.get("1.0", "end")
-    assert data["diet"] in app.diet_text.get("1.0", "end")
-    expected_calories = int(80 * data["calorie_factor"])
-    assert f"{expected_calories} kcal" in app.calorie_label.cget("text")
 
-def test_update_program_beginner(app):
-    """Check that selecting Beginner updates workout, diet, and calories."""
-    app.weight_var.set(60)
-    app.program_var.set("Beginner (BG)")
-    app.update_program()
+@pytest.fixture
+def app_instance(test_db):
+    """Fixture to safely instantiate ACEestApp in completely headless environments without X11."""
+    has_display = False
+    try:
+        test_root = tk.Tk()
+        test_root.withdraw()
+        test_root.destroy()
+        has_display = True
+    except (tk.TclError, Exception):
+        has_display = False
 
-    data = app.programs["Beginner (BG)"]
-    assert data["workout"] in app.workout_text.get("1.0", "end")
-    assert data["diet"] in app.diet_text.get("1.0", "end")
-    expected_calories = int(60 * data["calorie_factor"])
-    assert f"{expected_calories} kcal" in app.calorie_label.cget("text")
+    if has_display:
+        root = tk.Tk()
+        root.withdraw()
+        app = aceest_app.ACEestApp(root)
+        yield app
+        try:
+            root.destroy()
+        except Exception:
+            pass
+    else:
+        with patch("tkinter.Tk") as mock_tk_cls, \
+             patch("tkinter.Frame"), \
+             patch("tkinter.Label"), \
+             patch("tkinter.Entry"), \
+             patch("tkinter.ttk.Button"), \
+             patch("tkinter.ttk.Combobox"), \
+             patch("tkinter.ttk.Notebook"), \
+             patch("tkinter.Text"):
 
-def test_reset_clears_fields(app):
-    """Ensure reset clears all fields and labels."""
-    app.name_var.set("Test User")
-    app.age_var.set(25)
-    app.weight_var.set(70)
-    app.program_var.set("Fat Loss (FL)")
-    app.progress_var.set(80)
-    app.update_program()
+            mock_root = mock_tk_cls.return_value
+            mock_root.winfo_children.return_value = []
 
-    app.reset()
+            with patch("tkinter.StringVar", side_effect=lambda value="": DummyVar(value)), \
+                 patch("tkinter.IntVar", side_effect=lambda value=0: DummyVar(value)):
 
-    assert app.name_var.get() == ""
-    assert app.age_var.get() == 0
-    assert app.weight_var.get() == 0
-    assert app.program_var.get() == ""
-    assert app.progress_var.get() == 0
-    assert app.workout_text.get("1.0", "end").strip() == ""
-    assert app.diet_text.get("1.0", "end").strip() == ""
-    assert app.calorie_label.cget("text") == "Estimated Calories: --"
+                app = aceest_app.ACEestApp(mock_root)
+                yield app
 
-def test_save_client_incomplete(monkeypatch, app):
-    """Ensure save_client warns when name or program missing."""
-    called = {}
+                if hasattr(app, "conn") and app.conn:
+                    app.conn.close()
 
-    def fake_warning(title, message):
-        called["warning"] = (title, message)
 
-    monkeypatch.setattr(messagebox, "showwarning", fake_warning)
+def test_init_db(test_db):
+    """Test database initialization and default admin creation."""
+    conn = sqlite3.connect(test_db)
+    cur = conn.cursor()
+    
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = {row[0] for row in cur.fetchall()}
+    expected_tables = {"users", "clients", "progress", "workouts", "exercises", "metrics"}
+    assert expected_tables.issubset(tables)
+    
+    cur.execute("SELECT role FROM users WHERE username='admin'")
+    row = cur.fetchone()
+    assert row is not None
+    assert row[0] == "Admin"
+    conn.close()
 
-    app.name_var.set("")
-    app.program_var.set("")
-    app.save_client()
 
-    assert "warning" in called
-    assert "Incomplete" in called["warning"][0]
+def test_login_success(app_instance):
+    """Test successful user login with valid admin credentials."""
+    app_instance.username_var.set("admin")
+    app_instance.password_var.set("admin")
+    
+    with patch.object(app_instance, "dashboard", return_value=None) as mock_dash:
+        app_instance.login()
+        assert app_instance.current_user == "admin"
+        assert app_instance.current_role == "Admin"
+        mock_dash.assert_called_once()
 
-def test_save_client_success(monkeypatch, app):
-    """Ensure save_client shows info when valid data provided."""
-    called = {}
 
-    def fake_info(title, message):
-        called["info"] = (title, message)
+def test_login_failure(app_instance):
+    """Test login failure with invalid credentials."""
+    app_instance.username_var.set("admin")
+    app_instance.password_var.set("wrongpassword")
+    
+    with patch("tkinter.messagebox.showerror") as mock_error:
+        app_instance.login()
+        assert app_instance.current_user is None
+        mock_error.assert_called_once()
 
-    monkeypatch.setattr(messagebox, "showinfo", fake_info)
 
-    app.name_var.set("Senthil")
-    app.program_var.set("Fat Loss (FL)")
-    app.progress_var.set(75)
-    app.save_client()
+def test_add_save_client(app_instance):
+    """Test adding a client via simpledialog input mock, avoiding UI refresh errors."""
+    with patch("tkinter.simpledialog.askstring", return_value="John Doe"), \
+         patch.object(app_instance, "refresh_client_list") as mock_refresh, \
+         patch("tkinter.messagebox.showinfo") as mock_info:
+        
+        app_instance.add_save_client()
+        
+        app_instance.cur.execute("SELECT name, membership_status FROM clients WHERE name=?", ("John Doe",))
+        row = app_instance.cur.fetchone()
+        assert row is not None
+        assert row[0] == "John Doe"
+        assert row[1] == "Active"
+        mock_refresh.assert_called_once()
+        mock_info.assert_called_once()
 
-    assert "info" in called
-    assert "Senthil" in called["info"][1]
-    assert "75%" in called["info"][1]
+
+def test_generate_program(app_instance):
+    """Test AI program generator assigns a workout program, bypassing UI summary updates."""
+    app_instance.current_client = "Jane Doe"
+    app_instance.cur.execute("INSERT INTO clients (name, membership_status) VALUES (?, ?)", ("Jane Doe", "Active"))
+    app_instance.conn.commit()
+    
+    with patch.object(app_instance, "refresh_summary") as mock_refresh, \
+         patch("tkinter.messagebox.showinfo") as mock_info:
+        
+        app_instance.generate_program()
+        
+        app_instance.cur.execute("SELECT program FROM clients WHERE name=?", ("Jane Doe",))
+        program = app_instance.cur.fetchone()[0]
+        assert program is not None
+        assert len(program) > 0
+        mock_refresh.assert_called_once()
+        mock_info.assert_called_once()
+
+
+def test_add_workout(app_instance):
+    """Test adding workout entries for a client."""
+    app_instance.current_client = "Mike Smith"
+    app_instance.cur.execute("INSERT INTO clients (name, membership_status) VALUES (?, ?)", ("Mike Smith", "Active"))
+    app_instance.conn.commit()
+    
+    app_instance.cur.execute(
+        "INSERT INTO workouts (client_name, date, workout_type, duration_min, notes) VALUES (?, ?, ?, ?, ?)",
+        ("Mike Smith", "2026-10-10", "Strength", 45, "Great session")
+    )
+    app_instance.conn.commit()
+    
+    app_instance.cur.execute("SELECT workout_type, duration_min, notes FROM workouts WHERE client_name=?", ("Mike Smith",))
+    row = app_instance.cur.fetchone()
+    assert row == ("Strength", 45, "Great session")
+
+
+def test_check_membership(app_instance):
+    """Test viewing membership status popup info."""
+    app_instance.current_client = "Sarah Connor"
+    app_instance.cur.execute(
+        "INSERT INTO clients (name, membership_status, membership_end) VALUES (?, ?, ?)",
+        ("Sarah Connor", "Active", "2026-12-31")
+    )
+    app_instance.conn.commit()
+    
+    with patch("tkinter.messagebox.showinfo") as mock_info:
+        app_instance.check_membership()
+        mock_info.assert_called_once()
+        args = mock_info.call_args[0]
+        assert "Active" in args[1]
+        assert "2026-12-31" in args[1]

@@ -3,75 +3,68 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "2026ht66045/aceest_app"
-        IMAGE_TAG  = "${BUILD_NUMBER}"
-    }
-
-    triggers {
-        githubPush()
+        PYTHONUNBUFFERED = '1'
+        MPLBACKEND = 'Agg'
+        DOCKER_IMAGE = '2026ht66045/aceest_app'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Set Up Virtualenv & Dependencies') {
             steps {
-                echo 'Checking out main branch'
-                checkout scm
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo 'Installing python dependencies'
                 sh '''
-                python3 -m venv .venv
-                .venv/bin/pip install -r requirements.txt
+                    rm -rf .venv
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    pip install --upgrade pip
+
+                    # Install required Python dependencies
+                    pip install matplotlib fpdf2 pytest pytest-cov
+
+                    if [ -f requirements.txt ]; then
+                        pip install -r requirements.txt
+                    fi
                 '''
             }
         }
 
-        stage('Test') {
+        stage('Execute Pytest') {
             steps {
-                echo 'Running Automated Test'
                 sh '''
-                .venv/bin/pip install pytest pytest-xvfb
-                xvfb-run -a .venv/bin/pytest tests/
+                    . .venv/bin/activate
+                    pytest tests/test_aceest_app.py --junitxml=test-results.xml -v
                 '''
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build & Push Docker Image') {
             steps {
-                echo 'Building Docker image'
-                sh '''
-                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
-                '''
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                echo 'Pushing image to Docker Hub'
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(
+                    credentialsId: env.DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
-                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${IMAGE_NAME}:latest
-
-                    docker logout
+                        docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest .
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                        docker push ${DOCKER_IMAGE}:latest
+                        docker logout
                     '''
                 }
             }
         }
+    }
 
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: 'test-results.xml'
+        }
+        cleanup {
+            sh 'rm -rf .venv test_fitness.db aceest_fitness.db'
+        }
+        failure {
+            echo 'Build failed. Check test-results.xml and Jenkins console log.'
+        }
     }
 }
