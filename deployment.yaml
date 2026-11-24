@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-app-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aceest-app
+  template:
+    metadata:
+      labels:
+        app: aceest-app
+    spec:
+      containers:
+      - name: aceest-app
+        image: 2026ht66045/aceest_app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: MPLBACKEND
+          value: "Agg"
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: aceest-app-service
+# spec:
+#   selector:
+#     app: aceest-app
+#   ports:
+#   - protocol: TCP
+#     port: 80
+#     targetPort: 5000
+#   type: NodePort
